@@ -415,7 +415,8 @@ ok("ham stream Stripe imzası 200", res.kod === 200 && res.govde?.alindi === tru
 
 console.log("\n▸ /api/chat, /api/gorsel, /api/mcp güvenlik kapıları");
 const eskiToken = process.env.ZENAI_ACCESS_TOKEN;
-process.env.ZENAI_ACCESS_TOKEN = "gizli-erisim-anahtari-123";
+const testToken = "test-" + crypto.randomBytes(6).toString("hex");
+process.env.ZENAI_ACCESS_TOKEN = testToken;
 res = sahteRes();
 await chat(req({ model: "x", messages: [{ role: "user", content: "hi" }] }, { method: "POST", origin: "https://kotu.com" }), res);
 ok("chat kötü origin 403", res.kod === 403);
@@ -423,11 +424,11 @@ res = sahteRes();
 await chat(req({ model: "x", messages: [{ role: "user", content: "hi" }] }, { method: "POST" }), res);
 ok("chat token yoksa 401", res.kod === 401);
 res = sahteRes();
-await chat(req({}, { method: "POST", headers: { "x-zenai-token": "gizli-erisim-anahtari-123" } }), res);
+await chat(req({}, { method: "POST", headers: { "x-zenai-token": testToken } }), res);
 ok("chat geçerli tokenla 400 (model/messages)", res.kod === 400);
 
 res = sahteRes();
-await gorsel(req({ prompt: "kedi", oran: "99:1" }, { method: "POST", headers: { "x-zenai-token": "gizli-erisim-anahtari-123" } }), res);
+await gorsel(req({ prompt: "kedi", oran: "99:1" }, { method: "POST", headers: { "x-zenai-token": testToken } }), res);
 ok("gorsel geçersiz oran 400", res.kod === 400);
 res = sahteRes();
 await gorsel(req({ prompt: "kedi" }, { method: "POST" }), res);
@@ -435,7 +436,7 @@ ok("gorsel token yoksa 401", res.kod === 401);
 
 for (const ssrfUc of ["http://127.0.0.1/mcp", "http://169.254.169.254/latest/meta-data", "http://localhost/mcp", "http://[::1]/mcp", "file:///etc/passwd"]) {
   res = sahteRes();
-  await mcp(req({ action: "tools", uc: ssrfUc }, { method: "POST", headers: { "x-zenai-token": "gizli-erisim-anahtari-123" } }), res);
+  await mcp(req({ action: "tools", uc: ssrfUc }, { method: "POST", headers: { "x-zenai-token": testToken } }), res);
   ok(`mcp SSRF engelli (${ssrfUc})`, res.kod === 400);
 }
 if (eskiToken === undefined) delete process.env.ZENAI_ACCESS_TOKEN;
