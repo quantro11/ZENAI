@@ -35,13 +35,13 @@ def otomatik(parcalar, llm: Optional[Callable] = None) -> str:
         try:
             return _playwright(pw, islem, hedef, ek)
         except Exception as e:
-            return f"[Playwright hatasi, hafif moda gecildi: {e}]-> {_hafif(islem, hedef)}"
+            return f"[Playwright hatasi, hafif moda gecildi: {e}]-> {_hafif(islem, hedef, ek)}"
 
     if islem == "soru" and llm:
         return llm([
             {"role": "system", "content": "Sayfa icerigini ozetle, ana basliklari ver. Turkce."},
             {"role": "user", "content": hedef[:6000]}], max_tokens=2000) or "ozetleme yok"
-    return _hafif(islem, hedef)
+    return _hafif(islem, hedef, ek)
 
 def _playwright(pw, islem: str, hedef: str, ek) -> str:
     with pw() as p:
@@ -71,7 +71,7 @@ def _playwright(pw, islem: str, hedef: str, ek) -> str:
         tar.close()
         return "[TARAYICI] bilinmeyen islem"
 
-def _hafif(islem: str, hedef: str = "") -> str:
+def _hafif(islem: str, hedef: str = "", ek: str = "") -> str:
     if islem == "ac" and hedef.startswith("http"):
         try:
             from agentv2.guvenlik import pinli_hedef
@@ -86,7 +86,8 @@ def _hafif(islem: str, hedef: str = "") -> str:
             r = subprocess.run(komut, timeout=20)
             if r.returncode == 0:
                 import re
-                h = open("/tmp/lb_sayfa.html", "r", errors="ignore").read()[:20000]
+                with open("/tmp/lb_sayfa.html", "r", errors="ignore") as f:
+                    h = f.read()[:20000]
                 metin = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>|<[^>]+>", " ", h)
                 metin = re.sub(r"\s+", " ", metin).strip()
                 return metin[:4000]
@@ -94,7 +95,7 @@ def _hafif(islem: str, hedef: str = "") -> str:
             return f"[hafif tarayici: {e}]"
     if islem == "ekran":
         try:
-            out = ek or "ekran.png"
+            out = ek or hedef or "ekran.png"
             subprocess.run(["import", "-window", "root", out] if os.name != "nt" else ["true"], timeout=10)
             return f"Ekran: {out} (ImageMagick 'import' gerekir)"
         except Exception:

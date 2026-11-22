@@ -11,6 +11,7 @@ Ozet akis:
   MODE=birlestir python3 egit_kod.py         # GGUF + (istege bagli HF yukleme)
 """
 import json, os, sys
+from getpass import getpass
 
 MODE = os.environ.get("MODE", "kod")
 TABAN = "Qwen/Qwen2.5-Coder-14B-Instruct"
@@ -64,9 +65,8 @@ def egit(mode):
     print("ADAPTER KAYDEDILDI: lora_%s" % mode)
 
 def birlestir():
-    from unsloth import FastLanguageModel
     print("Taban yukleniyor ...")
-    model, tokenizer = yukle_model()
+    model, tokenizer, _ = yukle_model()
     print("Adapter eklenip dogrudan GGUF uretiliyor (lora_turkce + lora_kod) ...")
     model.save_pretrained_gguf("gguf_lenkod", quantization_method="q4_k_m",
                                adapter_names=["lora_turkce", "lora_kod"])
@@ -80,13 +80,13 @@ def birlestir():
         from huggingface_hub import HfApi, login
         token = getpass("HF_TOKEN: ")
         login(token=token, add_to_git_credential=False)
-        repo = "Lennebraha38/lennebraha-coder"
+        repo = "quantro11/zenai-coder"
         api = HfApi()
         api.create_repo(repo, token=token, exist_ok=True)
         gguf = gguf[0]
         api.upload_file(path_or_fileobj=gguf, path_in_repo=os.path.basename(gguf),
                         repo_id=repo, token=token)
-        modelfile = "FROM %s\nSYSTEM \"\"\"Sen Lennebraha38 tarafindan egitilmis kod asistanisin. Turkce sorulari anlar, calisan Python kodu yazar.\"\"\"" % os.path.basename(gguf)
+        modelfile = "FROM %s\nSYSTEM \"\"\"Sen ZenAI tarafindan egitilmis kod asistanisin. Turkce sorulari anlar, calisan Python kodu yazar.\"\"\"" % os.path.basename(gguf)
         api.upload_file(path_or_fileobj=modelfile.encode(), path_in_repo="Modelfile", repo_id=repo, token=token)
         print("HF TAMAM: https://huggingface.co/%s" % repo)
 

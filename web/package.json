@@ -5,7 +5,8 @@
   "description": "ZenAI web arayüzü (vanilla JS, Vercel serverless API'leri)",
   "main": "index.html",
   "scripts": {
-    "test:gui": "NODE_PATH=$(npm root -g) node web_gui_test.js"
+    "test:api": "node ../browser_tests/test_api.mjs",
+    "test:gui": "NODE_PATH=$(npm root -g) node ../browser_tests/web_gui_test.js"
   },
   "engines": {
     "node": ">=20"

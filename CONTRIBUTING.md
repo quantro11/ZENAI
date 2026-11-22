@@ -13,8 +13,8 @@ Katkı veren herkes bu kurallara uygun şekilde çalışır.
 ## Kurulum
 
 ```bash
-git clone https://github.com/Lennebraha38/lenbeyni
-cd lenbeyni
+git clone https://github.com/quantro11/ZENAI
+cd ZENAI
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```

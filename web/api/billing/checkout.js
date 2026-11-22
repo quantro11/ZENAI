@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   // Ücretli plan için oturum zorunlu — sahipsiz abonelik oluşmasın.
   const oturum = oturumOku(req);
   if (!oturum) {
-    return res.status(401).json({ error: "Abonelik için önce Google ile giriş yap." });
+    return res.status(401).json({ error: "Abonelik için önce giriş yap." });
   }
   const sifre = oturumSifresi();
   if (!sifre) return res.status(500).json({ error: "Sunucu yapılandırması eksik" });

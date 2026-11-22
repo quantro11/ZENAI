@@ -10,27 +10,41 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "20" }
       - name: Python bagimliliklar
-        run: pip install -r requirements.txt pytest
-      - name: Derleme kontrolu (core + voice + scripts)
-        run: python -m py_compile agentv2/zenai_zeka.py agentv2/akil_motoru.py agentv2/model_routing.py agentv2/self_correction.py agentv2/otomatik_skorer.py agentv2/cogunluk_oyu.py agentv2/meclis_hakemi.py agentv2/tam_zirve.py agentv2/guvenlik.py agentv2/bellek_vektor.py agentv2/soru_bankasi.py agentv2/dogrulama.py agentv2/dogrulama_seti.py agentv2/llm_provider.py agentv2/onbellek.py agentv2/araclar/*.py karsilastirma.py voice/server/modes.py voice/server/streamer.py scripts/olcum.py scripts/sync_konu_modelleri.py
-      - name: JS syntax kontrolu (web + voice)
-        run: node --check web/app.js && node --check web/api/voice.js && node --check web/api/chat.js
-      - name: Konu modeli senkron kontrolu (python ↔ js)
-        run: python scripts/sync_konu_modelleri.py --kontrol voice/server/modes.py voice/server/streamer.py scripts/olcum.py scripts/sync_konu_modelleri.py
-      - name: JS syntax kontrolu (web api + app)
-        run: node --check web/api/voice.js && node --check web/api/chat.js && node --check web/app.js
-      - name: Konu modeli senkron kontrolu (python ↔ js)
+        run: pip install -r requirements.txt pytest pytest-cov ruff
+      - name: Derleme kontrolu (core + voice + scripts + egitim)
+        run: python -m py_compile agentv2/zenai_zeka.py agentv2/akil_motoru.py agentv2/model_routing.py agentv2/self_correction.py agentv2/otomatik_skorer.py agentv2/cogunluk_oyu.py agentv2/meclis_hakemi.py agentv2/tam_zirve.py agentv2/guvenlik.py agentv2/bellek_vektor.py agentv2/soru_bankasi.py agentv2/dogrulama.py agentv2/dogrulama_seti.py agentv2/llm_provider.py agentv2/onbellek.py agentv2/araclar/*.py karsilastirma.py voice/server/modes.py voice/server/streamer.py scripts/olcum.py scripts/olcum_dogrula.py scripts/sync_konu_modelleri.py scripts/yuk_testi.py egitim/*.py
+      - name: Kritik Python statik hata kapisi (ruff)
+        run: ruff check --select E9,F821,F811,B023,B033 agentv2 voice scripts tests karsilastirma.py egitim
+      - name: JS syntax + ESM import kontrolu (tum web API + istemci)
+        run: |
+          set -e
+          for f in web/app.js web/hud/hud.js voice/hud/hud.js; do
+            node --check "$f"
+          done
+          for f in web/api/*.js web/api/_lib/*.js web/api/auth/*.js web/api/billing/*.js; do
+            node --check "$f"
+            node --input-type=module -e "import('./$f').then(() => console.log('OK:', '$f'))"
+          done
+      - name: Web index.html hijyen kapisi (kirik bare-import / demo kalintisi yok)
+        run: |
+          if grep -nE "from ['\"]react-dom/client['\"]|HextaUI|cdn\.21st\.dev" web/index.html web/app.js; then
+            echo "web/ icinde kirik bare-import veya ucuncu parti demo kalintisi bulundu!"; exit 1
+          fi
+          echo "Web hijyen kapisi temiz"
+      - name: Konu modeli senkron kontrolu (python <-> js)
         run: python scripts/sync_konu_modelleri.py --kontrol
       - name: Olcum kaniti gate (puansiz karsilastirma / latency yok = FAIL)
         run: python scripts/olcum_dogrula.py
-      - name: Sifre/sifre sizintisi taramasi (build-time)
+      - name: Sifre/secret sizintisi taramasi (build-time)
         run: |
           if git grep -nE "(sk-[A-Za-z0-9]{20,}|gsi_|ghp_|AKIA[0-9A-Z]{16}|sk-ant-[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9._-]{20,})" -- ':!*.json' ':!*.jsonl' ':!kayit/*' ':!node_modules' | grep -v "olcum_dogrula" ; then
             echo "Yukaridaki satirlar secret olabilir!"; exit 1
           fi
           echo "Secret taramasi temiz"
-      - name: Test paketi (+ coverage)
-        run: pip install pytest-cov && python -m pytest tests/ -q --cov=agentv2 --cov-report=term --cov-fail-under=40
+      - name: Web API birim & guvenlik testleri (Node)
+        run: node browser_tests/test_api.mjs
+      - name: Python test paketi (+ coverage)
+        run: python -m pytest tests/ -q --cov=agentv2 --cov-report=term --cov-fail-under=40
       - name: Bagimlilik CVE taramasi (pip-audit)
         continue-on-error: true
         run: pip install pip-audit && pip-audit -r requirements.txt --fail-on=high
@@ -38,6 +52,16 @@ jobs:
         continue-on-error: true
         working-directory: web
         run: npm ci --ignore-scripts --no-audit --no-fund && npm audit --audit-level=high
+
+  web-ui-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: web-ui TypeScript & Vite build
+        working-directory: web-ui
+        run: npm ci --no-audit --no-fund && npm run build
 
   voice-test:
     runs-on: ubuntu-latest

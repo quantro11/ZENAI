@@ -161,15 +161,15 @@ if __name__ == "__main__":
         duzeltilen = 0
         sc_notu = ""
         if son.get("kelime", 0) > 0 and k in ("kod", "matematik"):
-            cevap, tur, not_ = self_correction(s, son["cikti"], k, 
-                lambda msg: _sor(msg, secilen_model, key, secilen_max))
+            cevap, tur, not_ = self_correction(s, son["cikti"], k,
+                lambda msg, _m=secilen_model, _mx=secilen_max: _sor(msg, _m, key, _mx))
             duzeltilen = tur
             sc_notu = not_
             son["cikti"] = cevap
             son["kelime"] = len(cevap.split())
         elif son.get("kelime", 0) > 0 and k == "mantik":
             cevap, tur, not_ = self_correction(s, son["cikti"], "genel",
-                lambda msg: _sor(msg, secilen_model, key, secilen_max))
+                lambda msg, _m=secilen_model, _mx=secilen_max: _sor(msg, _m, key, _mx))
             duzeltilen = tur
             sc_notu = not_
             son["cikti"] = cevap

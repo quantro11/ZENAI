@@ -38,6 +38,27 @@ function planCoz(nesne) {
   return id ? harita[id] || null : null;
 }
 
+// Vercel'de ham gövdeyi korumak için otomatik JSON parser kapatılır;
+// aksi halde parse→stringify imza doğrulamasını (HMAC-SHA256) bozar.
+export const config = { api: { bodyParser: false } };
+
+async function hamGovdeOku(req) {
+  if (typeof req.body === "string") return req.body;
+  if (Buffer.isBuffer(req.body)) return req.body.toString("utf8");
+  if (req && typeof req[Symbol.asyncIterator] === "function") {
+    const parcalar = [];
+    let toplam = 0;
+    for await (const p of req) {
+      const buf = Buffer.isBuffer(p) ? p : Buffer.from(p);
+      toplam += buf.length;
+      if (toplam > 1024 * 1024) throw new Error("Webhook gövdesi çok büyük");
+      parcalar.push(buf);
+    }
+    if (parcalar.length) return Buffer.concat(parcalar).toString("utf8");
+  }
+  return JSON.stringify(req.body ?? {});
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST gerekli" });
 
@@ -45,7 +66,8 @@ export default async function handler(req, res) {
   if (!secret) return res.status(500).json({ error: "STRIPE_WEBHOOK_SECRET tanımlı değil" });
 
   // Ham gövde şart: imza doğrulaması parse edilmiş JSON üzerinde çalışmaz.
-  const ham = (req.body && typeof req.body === "string") ? req.body : JSON.stringify(req.body ?? {});
+  let ham;
+  try { ham = await hamGovdeOku(req); } catch { return res.status(413).json({ error: "Gövde çok büyük" }); }
   const header = req.headers["stripe-signature"];
   if (!header) return res.status(400).json({ error: "Stripe-Signature başlığı yok" });
   if (!imzaDogrula(ham, header, secret)) return res.status(400).json({ error: "İmza doğrulanamadı" });

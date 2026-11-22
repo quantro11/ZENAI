@@ -10,6 +10,8 @@
 // diyor, GET 404). Bu yüzden iptal/işlem sonrası kayıt "free" gibi bir değerle
 // ÜZERİNE YAZILIR, silinmez.
 
+import crypto from "node:crypto";
+
 export const BLOB_OKUNUR = !!process.env.BLOB_READ_WRITE_TOKEN;
 const ONEKI = "zenai/";
 

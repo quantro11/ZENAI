@@ -3,6 +3,7 @@
 // güvenlik katmanını (CORS allowlist, rate-limit, token) kullanır; OpenRouter
 // SSE'ini HUD'un "faz"/"answer" delta biçimine çevirir.
 // Uç: POST /api/voice  {model:"chat", messages:[...], stream:true}
+import { izinliOrigin, tokenOnay, rateLimitOlustur } from "./_lib/auth.js";
 const OPENROUTER = "https://openrouter.ai/api/v1/chat/completions";
 const GROQ = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_HIZLI = process.env.GROQ_FAST_MODEL || "llama-3.3-70b-versatile";
@@ -10,6 +11,7 @@ const GROQ_ULTRA = process.env.GROQ_ULTRA_MODEL || "openai/gpt-oss-120b";
 const MAKS_TOKEN = 16384;
 const MAKS_MESAJ = 60000;
 const ALAN_BASINA = 30;
+const rateLimit = rateLimitOlustur(ALAN_BASINA);
 
 const MODELLER = {
   kod:       "cohere/north-mini-code:free",
@@ -24,34 +26,6 @@ const MODELLER = {
   teknoloji: "dots-studio/dots-3-note-preview:free",
 };
 const VARSAYILAN = "dots-studio/dots-3-note-preview:free";
-
-function izinliOrigin(req) {
-  const izin = (process.env.ZENAI_ORIGIN || "https://zenai-two.vercel.app")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  const origin = req.headers.origin;
-  if (!origin) return true;
-  return izin.includes(origin);
-}
-
-function tokenOnay(req) {
-  const beklenen = process.env.ZENAI_ACCESS_TOKEN;
-  if (!beklenen) return true;
-  const gelen = (req.headers["x-zenai-token"] || req.headers.authorization || "")
-    .replace(/^Bearer\s+/i, "").trim();
-  return gelen === beklenen;
-}
-
-const pencere = new Map();
-function rateLimit(req, maks = ALAN_BASINA) {
-  const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-    || req.socket?.remoteAddress || "?";
-  const simdi = Date.now();
-  const esik = simdi - 60000;
-  const gelen = (pencere.get(ip) || []).filter((t) => t > esik);
-  if (gelen.length >= maks) { pencere.set(ip, gelen); return true; }
-  pencere.set(ip, gelen.concat([simdi]));
-  return false;
-}
 
 function konu_sec(soru) {
   const s = String(soru || "").toLowerCase();
@@ -171,6 +145,20 @@ export default async function handler(req, res) {
             res.write(olay({ type: "answer", role: "assistant", content: d }));
           }
         } catch { /* bozuk satir: atla */ }
+      }
+    }
+    tampon += decoder.decode();
+    if (tampon.trim().startsWith("data: ")) {
+      const g = tampon.trim().slice(6);
+      if (g !== "[DONE]") {
+        try {
+          const j = JSON.parse(g);
+          const d = j.choices?.[0]?.delta?.content || "";
+          if (d) {
+            parca += d;
+            res.write(olay({ type: "answer", role: "assistant", content: d }));
+          }
+        } catch { /* atla */ }
       }
     }
     return parca;

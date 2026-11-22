@@ -45,7 +45,7 @@ def _anahtar_kavramlar(soru: str) -> List[str]:
     """Sorunun anlamli kelimelerini cikar (stopword'ler disinda)."""
     DUR = {"bu", "bir", "ve", "ile", "icin", "ne", "nasil", "kac", "kim",
            "neden", "mi", "mu", "nin", "nın", "dir", "dır", "ya", "da", "de",
-           "hangi", "neydir", "miydi", "ni", "niyi", "nin"}
+           "hangi", "neydir", "miydi", "ni", "niyi"}
     kelimeler = [w for w in re.findall(r"[a-zçğıöşü0-9]+", soru.lower()) if len(w) > 2 and w not in DUR]
     return kelimeler[:10]
 

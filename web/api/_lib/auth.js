@@ -149,22 +149,60 @@ export function oturumOku(req) {
 
 // ── Planlar: tek doğruluk kaynağı ──
 export const PLANLAR = {
-  free:     { ad: "Free",     rank: 0, gunluk: 30,   maxToken: 8192,  ozellik: ["web-arama"] },
-  silver:   { ad: "Silver",   rank: 1, gunluk: 200,  maxToken: 16384, ozellik: ["web-arama", "gorsel"] },
-  gold:     { ad: "Gold",     rank: 2, gunluk: 1000, maxToken: 32768, ozellik: ["web-arama", "gorsel", "oncelikli"] },
-  platinum: { ad: "Platinum", rank: 3, gunluk: 5000, maxToken: 65536, ozellik: ["web-arama", "gorsel", "oncelikli", "meclis"] },
+  free:     { kod: "free",     ad: "Free",     rank: 0, gunluk: 30,   maxToken: 8192,  ozellik: ["web-arama"] },
+  silver:   { kod: "silver",   ad: "Silver",   rank: 1, gunluk: 200,  maxToken: 16384, ozellik: ["web-arama", "gorsel"] },
+  gold:     { kod: "gold",     ad: "Gold",     rank: 2, gunluk: 1000, maxToken: 32768, ozellik: ["web-arama", "gorsel", "oncelikli"] },
+  platinum: { kod: "platinum", ad: "Platinum", rank: 3, gunluk: 5000, maxToken: 65536, ozellik: ["web-arama", "gorsel", "oncelikli", "meclis"] },
 };
 
 export function planGetir(ad) {
   return PLANLAR[ad] || PLANLAR.free;
 }
 
-// ── CORS (chat.js ile aynı allowlist mantığı) ──
-export function corsUygula(req, res) {
+// ── Paylaşılan CORS / Token / Rate-Limit güvenlik katmanı ──
+export function izinliOrigin(req) {
   const izin = (process.env.ZENAI_ORIGIN || "https://zenai-two.vercel.app")
     .split(",").map((s) => s.trim()).filter(Boolean);
   const origin = req.headers.origin;
-  if (origin && izin.includes(origin)) {
+  if (!origin) return true;
+  return izin.includes(origin);
+}
+
+export function tokenOnay(req) {
+  const beklenen = process.env.ZENAI_ACCESS_TOKEN;
+  if (!beklenen) return true;
+  const gelen = (req.headers["x-zenai-token"] || req.headers.authorization || "")
+    .replace(/^Bearer\s+/i, "").trim();
+  return guvenliEsit(gelen, beklenen);
+}
+
+export function rateLimitOlustur(varsayilanMaks = 30, pencereMs = 60000) {
+  const pencere = new Map();
+  let sonTemizlik = 0;
+  return function rateLimit(req, maks = varsayilanMaks) {
+    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
+      || req.socket?.remoteAddress || "?";
+    const simdi = Date.now();
+    const esik = simdi - pencereMs;
+    if (simdi - sonTemizlik > pencereMs && pencere.size > 256) {
+      for (const [k, ts] of pencere) {
+        const g = ts.filter((t) => t > esik);
+        if (g.length) pencere.set(k, g);
+        else pencere.delete(k);
+      }
+      sonTemizlik = simdi;
+    }
+    const gelen = (pencere.get(ip) || []).filter((t) => t > esik);
+    if (gelen.length >= maks) { pencere.set(ip, gelen); return true; }
+    pencere.set(ip, gelen.concat([simdi]));
+    return false;
+  };
+}
+
+// ── CORS (chat.js ile aynı allowlist mantığı) ──
+export function corsUygula(req, res) {
+  const origin = req.headers.origin;
+  if (origin && izinliOrigin(req)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
   }
@@ -172,6 +210,6 @@ export function corsUygula(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-zenai-token");
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") { res.status(204).end(); return true; }
-  if (origin && !izin.includes(origin)) { res.status(403).json({ error: "Kaynak engellendi" }); return true; }
+  if (origin && !izinliOrigin(req)) { res.status(403).json({ error: "Kaynak engellendi" }); return true; }
   return false;
 }

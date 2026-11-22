@@ -2,6 +2,7 @@
 // Kullanıcı key'i ASLA girmez/görmez — röle burada çalışır (chat.js deseni).
 // Görsel-çıktı veren OpenRouter modeli: google/gemini-2.5-flash-image (ucuz, gerçek görsel).
 // Güvenlik: CORS allowlist + opsiyonel token + IP rate-limit + prompt boyutu sınırı.
+import { izinliOrigin, tokenOnay, rateLimitOlustur } from "./_lib/auth.js";
 const OPENROUTER = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash-image";
 const MAKS_PROMPT = 2000;      // karakter
@@ -16,37 +17,7 @@ const MAKS_ONIZ = 16 * 1024 * 1024; // dönen görselin karakter üst sınırı
 // 3262") ve görsel üretimi tamamen bozuktu. Tek bir 1:1 görsel ~1-1.5K token
 // tutar; 3000 hem bütçeye sığar hem görseli kesmez.
 const MAKS_TOKEN = Number(process.env.OPENROUTER_IMAGE_MAX_TOKENS) || 3000;
-
-// ── CORS: sadece izin verilen kökler ──
-function izinliOrigin(req) {
-  const izin = (process.env.ZENAI_ORIGIN || "https://zenai-two.vercel.app")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  const origin = req.headers.origin;
-  if (!origin) return true;
-  return izin.includes(origin);
-}
-
-// ── Opsiyonel token: ZENAI_ACCESS_TOKEN tanımlıysa zorunlu ──
-function tokenOnay(req) {
-  const beklenen = process.env.ZENAI_ACCESS_TOKEN;
-  if (!beklenen) return true;
-  const gelen = (req.headers["x-zenai-token"] || req.headers.authorization || "")
-    .replace(/^Bearer\s+/i, "").trim();
-  return gelen === beklenen;
-}
-
-// ── Basit pencere throttling (bellek içi; tek warm instance) ──
-const pencere = new Map();
-function rateLimit(req, maks = MAKS_YANIT) {
-  const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-    || req.socket?.remoteAddress || "?";
-  const simdi = Date.now();
-  const esik = simdi - 60000;
-  const gelen = (pencere.get(ip) || []).filter((t) => t > esik);
-  if (gelen.length >= maks) { pencere.set(ip, gelen); return true; }
-  pencere.set(ip, gelen.concat([simdi]));
-  return false;
-}
+const rateLimit = rateLimitOlustur(MAKS_YANIT);
 
 export default async function handler(req, res) {
   const origin = req.headers.origin;
@@ -55,7 +26,7 @@ export default async function handler(req, res) {
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-zenai-token");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-zenai-token");
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "POST") return res.status(405).json({ error: "POST gerekli" });
 
@@ -102,7 +73,13 @@ export default async function handler(req, res) {
           max_tokens: azamiToken,
         }),
       });
-      return { r, data: await r.json() };
+      let data = {};
+      try {
+        data = await r.json();
+      } catch {
+        data = { error: { message: "Geçersiz sağlayıcı yanıtı (HTTP " + r.status + ")" } };
+      }
+      return { r, data };
     };
 
     let { r, data } = await cagir(MAKS_TOKEN);
@@ -118,8 +95,8 @@ export default async function handler(req, res) {
         // Görsel için en az 1000 token gerekiyor; altında denemeye değmez.
         if (uygun >= 1000) {
           const ikinci = await cagir(uygun);
-          if (ikinci.r.ok) { r = ikinci.r; data = ikinci.data; }
-          else { r = ikinci.r; data = ikinci.data; }
+          r = ikinci.r;
+          data = ikinci.data;
         }
       }
     }
@@ -139,7 +116,7 @@ export default async function handler(req, res) {
       return res.status(r.status).json({ error: hm });
     }
 
-    // OpenRouter görsel modelleri g��rüntüyü birkaç farklı biçimde döndürebiliyor
+    // OpenRouter görsel modelleri görüntüyü birkaç farklı biçimde döndürebiliyor
     // ve biçim modele göre DEĞİŞİYOR. Tek bir kalıba güvenmek "model çalışmıyor"
     // gibi görünen hatalara yol açıyor. Sırayla hepsini deniyoruz:
     //   1) output: [{ type:"image", data:"data:image/..." }]

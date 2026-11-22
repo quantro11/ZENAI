@@ -6,7 +6,7 @@ process.env.ZENAI_ORIGIN = "http://localhost:8899";
 process.env.OPENROUTER_KEY = "sk-or-test-anahtar";
 // Gercek depo (Vercel Blob) ile yazma/okma testi istege bagli.
 // Token ASLA koda gomulmez: web/.env.local (gitignore'li) veya kabuk ortamindan okunur.
-if (!process.env.BLOB_READ_WRITE_TOKEN) {
+if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.ZENAI_TEST_OFFLINE) {
   try {
     const { readFileSync } = await import("node:fs");
     for (const ln of readFileSync(new URL("../web/.env.local", import.meta.url), "utf8").split("\n")) {
@@ -33,11 +33,15 @@ const { hesapAc, girisDene, sifreOku, sifreDogrula, subUret, hesapSistemiVar,
   await import("../web/api/_lib/hesap.js");
 const { default: checkout } = await import("../web/api/billing/checkout.js");
 const { default: webhook } = await import("../web/api/billing/webhook.js");
+const { default: chat } = await import("../web/api/chat.js");
+const { default: gorsel } = await import("../web/api/gorsel.js");
+const { default: mcp } = await import("../web/api/mcp.js");
 const { sifrele, dogrula, oturumSifresi, googleDogrula, planGetir, PLANLAR } =
   await import("../web/api/_lib/auth.js");
 const { depoVar, depoTuru, planYaz, planOku, planSifirla } = await import("../web/api/_lib/store.js");
 
 import crypto from "node:crypto";
+import { Readable } from "node:stream";
 
 // Vercel Blob sonuclari kisa sureliginde guncellenmeyebilir (sonuc tutarliligi).
 // Bu yuzden belirli bir deger gorunene kadar kisa aralikla yeniden okunur.
@@ -101,6 +105,7 @@ ok("gold 32768", planGetir("gold").maxToken === 32768);
 ok("bilinmeyen -> free", planGetir("admin").rank === 0);
 ok("gold > silver", planGetir("gold").rank > planGetir("silver").rank);
 ok("4 plan tanımlı", Object.keys(PLANLAR).length === 4);
+ok("her planda kod alanı var (giris.js regresyonu)", ["free", "silver", "gold", "platinum"].every((k) => planGetir(k).kod === k));
 
 console.log("\n▸ /api/config (gizli sızdırmaz)");
 let res = sahteRes();
@@ -179,7 +184,7 @@ const HE = "test-" + Date.now() + "@zenai.test";
 // itibaren kayıt testleri kilitlenir. Bu yüzden koşuya özel IP üretiyoruz —
 // gerçekçi de (her ziyaretçinin farklı IP'si var).
 const TEST_IP = "10.99." + (Date.now() % 200) + "." + (1 + Math.floor(Math.random() * 250));
-ok("hesap sistemi depo ile açık", hesapSistemiVar() === true);
+ok("hesapSistemiVar depo durumunu doğru bildirir", hesapSistemiVar() === !!process.env.BLOB_READ_WRITE_TOKEN);
 ok("sub üretimi deterministik", subUret(HE) === subUret(HE.toUpperCase()));
 ok("sub e-postayı sızdırmıyor", !subUret(HE).includes("@") && subUret(HE).length === 24);
 
@@ -236,6 +241,7 @@ if (hesapSistemiVar()) {
   res = sahteRes();
   await giris(req({ email: HE, sifre: "guclu-sifre-1" }, { method: "POST", origin: "http://localhost:8899" }), res);
   ok("doğru şifreyle giriş 200", res.kod === 200);
+  ok("giriş yanıtında kullanici.plan.kod dolu", res.govde?.kullanici?.plan?.kod === "free");
   const girisCerez = res.cireZ.join(";");
   res = sahteRes();
   await giris(req({ email: HE, sifre: "yanlis-sifre" }, { method: "POST", origin: "http://localhost:8899" }), res);
@@ -397,6 +403,43 @@ if (depoVar) {
 } else {
   console.log("  (atlandi: BLOB_READ_WRITE_TOKEN veya UPSTASH_* tanimli degil)");
 }
+
+console.log("\n▸ Webhook ham stream (bodyParser: false uyumluluğu)");
+const hamStreamGovde = '{ "type": "ping",   "extra": 1 }'; // boşluklu ham JSON — stringify bozardı
+const streamReq = Readable.from([Buffer.from(hamStreamGovde, "utf8")]);
+streamReq.method = "POST";
+streamReq.headers = { "stripe-signature": imzala(hamStreamGovde, "whsec_test_yok") };
+res = sahteRes();
+await webhook(streamReq, res);
+ok("ham stream Stripe imzası 200", res.kod === 200 && res.govde?.alindi === true);
+
+console.log("\n▸ /api/chat, /api/gorsel, /api/mcp güvenlik kapıları");
+const eskiToken = process.env.ZENAI_ACCESS_TOKEN;
+process.env.ZENAI_ACCESS_TOKEN = "gizli-erisim-anahtari-123";
+res = sahteRes();
+await chat(req({ model: "x", messages: [{ role: "user", content: "hi" }] }, { method: "POST", origin: "https://kotu.com" }), res);
+ok("chat kötü origin 403", res.kod === 403);
+res = sahteRes();
+await chat(req({ model: "x", messages: [{ role: "user", content: "hi" }] }, { method: "POST" }), res);
+ok("chat token yoksa 401", res.kod === 401);
+res = sahteRes();
+await chat(req({}, { method: "POST", headers: { "x-zenai-token": "gizli-erisim-anahtari-123" } }), res);
+ok("chat geçerli tokenla 400 (model/messages)", res.kod === 400);
+
+res = sahteRes();
+await gorsel(req({ prompt: "kedi", oran: "99:1" }, { method: "POST", headers: { "x-zenai-token": "gizli-erisim-anahtari-123" } }), res);
+ok("gorsel geçersiz oran 400", res.kod === 400);
+res = sahteRes();
+await gorsel(req({ prompt: "kedi" }, { method: "POST" }), res);
+ok("gorsel token yoksa 401", res.kod === 401);
+
+for (const ssrfUc of ["http://127.0.0.1/mcp", "http://169.254.169.254/latest/meta-data", "http://localhost/mcp", "http://[::1]/mcp", "file:///etc/passwd"]) {
+  res = sahteRes();
+  await mcp(req({ action: "tools", uc: ssrfUc }, { method: "POST", headers: { "x-zenai-token": "gizli-erisim-anahtari-123" } }), res);
+  ok(`mcp SSRF engelli (${ssrfUc})`, res.kod === 400);
+}
+if (eskiToken === undefined) delete process.env.ZENAI_ACCESS_TOKEN;
+else process.env.ZENAI_ACCESS_TOKEN = eskiToken;
 
 console.log(`\n${gecti} geçti, ${kaldi} kaldı`);
 process.exit(kaldi ? 1 : 0);

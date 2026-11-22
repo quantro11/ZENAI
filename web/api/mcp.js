@@ -3,35 +3,10 @@
 // CORS ve anahtar sorunlarını sunucu tarafında çözer; key tarayıcıya asla sızmaz.
 // Güvenlik: SSRF önleme — iç ağ/özel IP uçlarına bağlanma engellenir.
 import { lookup } from "node:dns/promises";
+import { izinliOrigin, tokenOnay, rateLimitOlustur } from "./_lib/auth.js";
 
 const MCP_HEADERS = { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" };
-
-// ── Ortak güvenlik: CORS allowlist + opsiyonel token + IP rate-limit ──
-function izinliOrigin(req) {
-  const izin = (process.env.ZENAI_ORIGIN || "https://zenai-two.vercel.app")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  const origin = req.headers.origin;
-  if (!origin) return true;
-  return izin.includes(origin);
-}
-function tokenOnay(req) {
-  const beklenen = process.env.ZENAI_ACCESS_TOKEN;
-  if (!beklenen) return true;
-  const gelen = (req.headers["x-zenai-token"] || req.headers.authorization || "")
-    .replace(/^Bearer\s+/i, "").trim();
-  return gelen === beklenen;
-}
-const pencere = new Map();
-function rateLimit(req, maks = 60) {
-  const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-    || req.socket?.remoteAddress || "?";
-  const simdi = Date.now();
-  const esik = simdi - 60000;
-  const gelen = (pencere.get(ip) || []).filter((t) => t > esik);
-  if (gelen.length >= maks) { pencere.set(ip, gelen); return true; }
-  pencere.set(ip, gelen.concat([simdi]));
-  return false;
-}
+const rateLimit = rateLimitOlustur(60);
 
 // ── SSRF koruması ──
 function ipOzelMi(ip) {

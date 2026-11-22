@@ -2,7 +2,7 @@
 
 ZenAI Voice açık kaynaktır; lisanslar tek tek bileşen bazında ayrı ayrıdır.
 Tüm taban (beyin/`agentv2` + ses katmanı/`voice`) **MIT License** kapsamındadır
-(bkz. kök `LICENSE`), telif: Lennebraha38 (2026).
+(bkz. kök `LICENSE`), telif: Faruk Hilmi Akpınar / quantro11 (2026).
 
 ## Bileşen lisansları
 

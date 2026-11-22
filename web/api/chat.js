@@ -2,47 +2,17 @@
 // Kullanıcı ASLA key görmez/girmez — key sadece burada (env OPENROUTER_KEY).
 // Güvenlik: opsiyonel ZENAI_ACCESS_TOKEN, IP bazlı rate-limit, CORS allowlist,
 // max_tokens/mesaj boyutu sınırı (kötüye kullanım koruması) + plan bazlı tavan.
-import { oturumOku, planGetir } from "./_lib/auth.js";
+import { oturumOku, planGetir, izinliOrigin, tokenOnay, rateLimitOlustur } from "./_lib/auth.js";
 import { planOku } from "./_lib/store.js";
 const OPENROUTER = "https://openrouter.ai/api/v1/chat/completions";
 const GROQ = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_ULTRA = process.env.GROQ_ULTRA_MODEL || "openai/gpt-oss-120b";
 
-const MAKS_TOKEN = 16384;      // istemcinin isteyebileceği mutlak üst sınır
+const MAKS_TOKEN = 65536;      // platinum plan üst sınırı (plan.maxToken gerçek tavanı uygular)
 const MAKS_MESAJ = 60000;      // serileştirilmiş mesaj boyutu (karakter)
 const ALAN_BASINA = 30;        // 60 sn'de IP başına maks istek (ücretsiz/girişsiz)
 const UYE_BASINA = 200;        // giriş yapmış kullanıcı için geniş limit
-
-// ── CORS: sadece izin verilen kökler ──
-function izinliOrigin(req) {
-  const izin = (process.env.ZENAI_ORIGIN || "https://zenai-two.vercel.app")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  const origin = req.headers.origin;
-  if (!origin) return true; // sunucu-tarafı / curl — CORS başlığı zaten yok
-  return izin.includes(origin);
-}
-
-// ── Opsiyonel token: ZENAI_ACCESS_TOKEN tanımlıysa zorunlu ──
-function tokenOnay(req) {
-  const beklenen = process.env.ZENAI_ACCESS_TOKEN;
-  if (!beklenen) return true;
-  const gelen = (req.headers["x-zenai-token"] || req.headers.authorization || "")
-    .replace(/^Bearer\s+/i, "").trim();
-  return gelen === beklenen;
-}
-
-// ── Basit pencere throttling (bellek içi; tek warm instance). ──
-const pencere = new Map();
-function rateLimit(req, maks = ALAN_BASINA) {
-  const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-    || req.socket?.remoteAddress || "?";
-  const simdi = Date.now();
-  const esik = simdi - 60000;
-  const gelen = (pencere.get(ip) || []).filter((t) => t > esik);
-  if (gelen.length >= maks) { pencere.set(ip, gelen); return true; }
-  pencere.set(ip, gelen.concat([simdi]));
-  return false;
-}
+const rateLimit = rateLimitOlustur(ALAN_BASINA);
 
 export default async function handler(req, res) {
   // CORS başlıklarını her yanıt için tek noktadan kur
@@ -144,8 +114,11 @@ export default async function handler(req, res) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        res.write(decoder.decode(value));
+        const parca = decoder.decode(value, { stream: true });
+        if (parca) res.write(parca);
       }
+      const kalan = decoder.decode();
+      if (kalan) res.write(kalan);
       return res.end();
     }
 

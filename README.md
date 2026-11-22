@@ -8,7 +8,7 @@ Tabletten buluta uzanan iki kademeli beyin sistemi:
 - **Yerel beyin** (Ollama): 7B/14B kod modeli — offline, kendi donanımında
 - **Mega beyin** (OpenRouter): nemotron-550B (ücretsiz tier kotaları ile çalışır) — bulutta
 
-> Not: Ücretsiz tier modeller kotalıdır; günün 첫 호출larında 429 alabilir.
+> Not: Ücretsiz tier modeller kotalıdır; günün ilk çağrılarında 429 alabilir.
 > Fallback zinciri otomatik devreye girer. Detay: [Ölçüm Şeffaflığı](#ölçüm-şeffaflığı).
 
 ## Modüller
@@ -16,21 +16,21 @@ Tabletten buluta uzanan iki kademeli beyin sistemi:
 | Modül | Dosya | Ne yapar |
 |---|---|---|
 | Ajan döngüsü | `agentv2/zenai_zeka.py` | `[ARAMA]` / `[SITE]` komutlarıyla web'i talimatla tarar |
-| **Akıl Motoru** | `agentv2/akil_motoru.py` | Claude'un az-token/yüksek-mantık felsefesi + bizim bol-token: CoT yöntemi, 5000 kelime hedefi, kendi kendini doğrulama |
-| **Model Routing** | `agentv2/model_routing.py` | Konuya göre uzman model: kod→north-mini-code, matematik/mantık→nemotron-550B, diğer→dots-3 (2-4x Claude token büyüklüğü) |
+| **Akıl Motoru** | `agentv2/akil_motoru.py` | CoT yöntemi, kapsamlı analiz ve kendi kendini doğrulama |
+| **Model Routing** | `agentv2/model_routing.py` | Konuya göre uzman model: kod→north-mini-code, matematik/mantık→nemotron-550B, diğer→dots-3 |
 | **Self-Correction** | `agentv2/self_correction.py` | Kod cevapları sandbox'ta çalıştırılır → syntax/runtime hatası bulunursa model düzeltme turu yapar |
-| **Otomatik Skorer** | `agentv2/otomatik_skorer.py` | Soru-bazlı beklenen yanıt (`soru_bankasi.HEDEFLER`) eşleştirir: matematik=sayısal, mantık/dil=anahtar kavram; kod=sandbox çalıştırma. Doğruluk ağırlıklı: hedefsiz cevap ≤0.4 |
-| **Çoğuluk Oyu** | `agentv2/cogunluk_oyu.py` | Aynı soruyu N kez sorar, en sık cevabı seçer (doğruluk istatistiksel artırılır) |
+| **Otomatik Skorer** | `agentv2/otomatik_skorer.py` | Soru-bazlı beklenen yanıt (`soru_bankasi.HEDEFLER`) eşleştirir: matematik=sayısal, mantık/dil=anahtar kavram; kod=sandbox çalıştırma |
+| **Çoğunluk Oyu** | `agentv2/cogunluk_oyu.py` | Aynı soruyu N kez sorar, en sık cevabı seçer |
 | Karşılaştırma testi | `karsilastirma.py` | Türkçe karşılaştırma + rate-limit aware (retry + backoff); çıktısı **yazım sırasında otomatik puanlanır** (`puan`+`ozet`), CI gate'i puansız ham kaydı reddeder |
 | Benchmark | `agentv2/tam_zirve.py` + `soru_bankasi.py` | **150 soru** / 10 konu / 3 zorluk; `--kategori`, `--zorluk` filtreleri |
 | Bağımsız doğrulama | `agentv2/dogrulama.py` + `dogrulama_seti.py` | 40 gerçek-soru **strict doğru/yanlış** (`puan_strict`); uzunluk/yapı puanı yok |
 | Deep Research | `agentv2/zenai_zeka.py` (`rapor` modu) | Soruyu alt-başlıklara böler, kaynakları toplar, kaynaklı kurumsal rapor yazar |
 | Bellek (vektör) | `agentv2/bellek_vektor.py` | Karakter n-gram benzerliğiyle hatırlar (`~/.zenai_bellek.json`); TTL + kullanıcı izolasyonu |
 | Güvenlik | `agentv2/guvenlik.py` + `SECURITY.md` | SSRF (DNS rebinding + decimal IP) / kod (AST + MWE) / shell (IFS hilesi) / path / prompt-injection — deny-by-default |
-| Web GUI | `web/` | Premium arayüz: konu→model rozeti, Akıl Motoru, AI Meclisi, **Skills**, **MCP**; opsiyonel token (`ZENAI_ACCESS_TOKEN`) + IP rate-limit |
+| Web GUI & API | `web/` | Sıfır-konfigürasyon arayüz + Vercel Serverless API'leri (`/api/chat`, `/api/voice`, `/api/gorsel`, `/api/mcp`, `/api/auth/*`, `/api/billing/*`, `/api/config`, `/api/health`) |
+| Sesli Asistan (Voice) | `voice/` | FastAPI SSE gateway (`voice/server`), HUD durum makinesi (`voice/hud`) ve opsiyonel Pipecat botu (`voice/bot`) |
 | Kod eğitimi | `egitim/` | QLoRA ile 7B/14B kod modeli fine-tune (Kaggle) |
-| Cihaz beyni | `ciday/` (tablet) | Ollama tabanlı, offline sohbet/kod |
-| Araç katmanı | `agentv2/araclar/` | 10+ yetenek: belge, kod sandbox, sistem, github, haber, hava, görsel, güvenlik (browser-use/gpt-researcher/OpenCLI özleri) |
+| Araç katmanı | `agentv2/araclar/` | 10+ yetenek: belge, kod sandbox, sistem, github, haber, hava, görsel, tarayıcı, güvenlik |
 
 ## Ölçüm Şeffaflığı
 
@@ -49,22 +49,21 @@ Kaynak dosya | Yöntem | Model | Tarih | Doğru/Toplam | Yüzde
 ## Test
 
 ```bash
-python3 -m pytest tests/ -q          # 176 test (akil + guvenlik + skor + araclar + token + meclis + dayaniklilik)
-python3 scripts/yuk_testi.py --n 20 --eşzaman 10   # voice gateway eşzamanlılık (SSE, ağ yok)
-python3 agentv2/otomatik_skorer.py karsilastirma.json   # canli test skoru raporu
-python3 agentv2/cogunluk_oyu.py "soru" --tekrar 3       # majority vote
-python3 agentv2/tam_zirve.py --soru 10                  # zirve testi (ilk 10 soru)
-python3 agentv2/tam_zirve.py --kategori kod             # sadece kod soruları
-python3 agentv2/tam_zirve.py --zorluk zor               # sadece zor sorular
-python3 agentv2/tam_zirve.py --kalan-bekle              # rate-limit bekle, sürekli dene
-python3 agentv2/meclis_hakemi.py "soru"                 # genişletilmiş hakem paneli (12 kriter)
-python3 agentv2/akil_dongu_test.py "soru"               # 5 tur kalite ölçümü
-python3 agentv2/dogrulama.py                            # bağımsız 40 gerçek soru (strict)
-python3 agentv2/dogrulama.py --adet 10 --kalan-bekle    # hızlı + rate-limit uyumlu
+python3 -m pytest tests/ voice/tests/ -q                # Python birim + güvenlik + voice testleri
+node browser_tests/test_api.mjs                         # Web Serverless API + auth + billing + SSRF testleri
+node voice/tests/test_hud.js                            # Voice HUD durum makinesi testleri
+python3 scripts/yuk_testi.py --n 20 --eşzaman 10        # Voice gateway eşzamanlılık (SSE, ağ yok)
+python3 scripts/olcum_dogrula.py                        # Ölçüm şeffaflığı CI kapısı
+python3 scripts/sync_konu_modelleri.py --kontrol        # Python ↔ JS konu modeli senkron doğrulaması
+python3 agentv2/otomatik_skorer.py karsilastirma.json   # Canlı test skoru raporu
+python3 agentv2/cogunluk_oyu.py "soru" --tekrar 3       # Majority vote
+python3 agentv2/tam_zirve.py --soru 10                  # Zirve testi (ilk 10 soru)
+python3 agentv2/meclis_hakemi.py "soru"                 # Genişletilmiş hakem paneli (12 kriter)
+python3 agentv2/dogrulama.py                            # Bağımsız 40 gerçek soru (strict)
+```
 
 > Rate-limit notu: ücretsiz OpenRouter modelleri 429 dönebilir; `--kalan-bekle`
 > otomatik bekler. Zirve raporunu `agentv2/tam_zirve.py --sadece-skor` ile gör.
-```
 
 ## Kurulum
 

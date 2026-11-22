@@ -71,8 +71,8 @@ function authModAyarla(mod) {
   if (sifre) sifre.autocomplete = kayit ? "new-password" : "current-password";
   if (ad) ad.required = kayit;
   const b = $("girisGonder");
-  if (b) b.textContent = kayit ? L.tr.auth_kayit_btn : L.tr.auth_giris_btn;
-  if ($("authBaslik")) $("authBaslik").textContent = kayit ? L.tr.auth_kayit_baslik : L.tr.auth_baslik;
+  if (b) b.textContent = kayit ? t("auth_kayit_btn") : t("auth_giris_btn");
+  if ($("authBaslik")) $("authBaslik").textContent = kayit ? t("auth_kayit_baslik") : t("auth_baslik");
   authHataGoster("");
   $("girisSifre")?.focus();
 }
@@ -159,6 +159,7 @@ async function cikisYap() {
   try { await api("/api/auth/logout", {}); } catch { /* yoksay */ }
   SUNUCU.girisYapildi = false;
   SUNUCU.kullanici = null;
+  SUNUCU.plan = { kod: "free", ad: "Free", maxToken: 8192 };
   authUygula();
   planlariIsaretle();
   durum(true, "Çıkış yapıldı ✓");
@@ -171,11 +172,13 @@ function authUygula() {
   if (b) {
     const k = SUNUCU.kullanici;
     b.classList.toggle("girisli", !!k);
+    const guvenliAvatar = k?.avatar && /^https:\/\//i.test(String(k.avatar)) ? kaçis(String(k.avatar)) : "";
+    const guvenliAd = kaçis(String(k?.ad || "Hesabım"));
     b.innerHTML = k
-      ? `${k.avatar ? `<img src="${k.avatar}" alt="" class="auth-avatar" referrerpolicy="no-referrer">` : '<span class="auth-avatar-harf">Z</span>'}<span class="auth-ad">${k.ad || "Hesabım"}</span>`
-      : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span data-i18n="auth_giris">Giriş</span>';
+      ? `${guvenliAvatar ? `<img src="${guvenliAvatar}" alt="" class="auth-avatar" referrerpolicy="no-referrer">` : '<span class="auth-avatar-harf">Z</span>'}<span class="auth-ad">${guvenliAd}</span>`
+      : `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span data-i18n="auth_giris">${kaçis(t("auth_giris"))}</span>`;
     b.onclick = SUNUCU.girisYapildi ? cikisYap : authAc;
-    b.setAttribute("aria-label", k ? "Çıkış yap: " + (k.ad || "") : "Giriş yap");
+    b.setAttribute("aria-label", k ? "Çıkış yap: " + (k.ad || "") : t("giris_yap"));
   }
   // Auth modalı: hesap sistemi ana yöntem, Google yalnızca yapılandırılmışsa.
   const izgara = $("girisIzgara");
@@ -237,7 +240,7 @@ const L = {
     auth_baslik: "ZenAI'ye giriş yap", auth_alt: "Sohbetlerini kaydet, senkronize et ve tüm cihazlarında kullan.",
     auth_google: "Google ile devam et", auth_misafir: "Misafir olarak devam",
     auth_not: "Giriş yapmadan da kullanabilirsin — sohbetler yalnız bu cihazda saklanır.",
-    auth_kayit: "Kayıt ol", auth_kayit_btn: "Hesap oluştur", auth_giris_btn: "Giriş yap",
+    auth_giris: "Giriş", auth_kayit: "Kayıt ol", auth_kayit_btn: "Hesap oluştur", auth_giris_btn: "Giriş yap",
     auth_kayit_baslik: "Ücretsiz hesap oluştur", auth_eposta: "E-posta", auth_sifre: "Şifre", auth_ad: "Ad",
     auth_ad_ph: "Adın", auth_sifre_ph: "Şifre (en az 8 karakter)", auth_veya: "veya",
     giris_yap: "Giriş yap", gorsel_uretiliyor: "Görsel oluşturuluyor…",
@@ -292,7 +295,7 @@ const L = {
     sartlar_baslik: "Kullanım Şartları",
     sartlar_icerik: "<p>ZenAI bir yapay zekâ asistanıdır; ürettiği bilgiler hatalı veya güncel olmayabilir. Önemli kararlarınızda doğrulama yapın.</p><p>Yasadışı içerik üretimi, telifli materyalin izinsiz kullanımı ve kötüye kullanım yasaktır.</p><p>Hizmet, veri'de aksama durumunda kesintisizlik garantisi vermez.</p>",
     iletisim_baslik: "İletişim",
-    iletisim_icerik: "<p>Geri bildirim, hata bildirimi veya işbirliği için bize ulaşabilirsiniz.</p><p><strong>GitHub:</strong> github.com/Lennebraha38/ZENAI</p><p><strong>Domain:</strong> zenai-two.vercel.app</p>",
+    iletisim_icerik: "<p>Geri bildirim, hata bildirimi veya işbirliği için bize ulaşabilirsiniz.</p><p><strong>GitHub:</strong> github.com/quantro11/ZENAI</p><p><strong>Domain:</strong> zenai-two.vercel.app</p>",
   },
   en: {
     yenikonus: "New chat", gecmisi_gizle: "Hide history", ayarlar: "Settings & Skills", bu_cihazda: "On this device",
@@ -307,7 +310,7 @@ const L = {
     auth_baslik: "Sign in to ZenAI", auth_alt: "Save your chats, sync them and use ZenAI on all your devices.",
     auth_google: "Continue with Google", auth_misafir: "Continue as guest",
     auth_not: "You can use ZenAI without signing in — chats are stored only on this device.",
-    auth_kayit: "Sign up", auth_kayit_btn: "Create account", auth_giris_btn: "Sign in",
+    auth_giris: "Sign in", auth_kayit: "Sign up", auth_kayit_btn: "Create account", auth_giris_btn: "Sign in",
     auth_kayit_baslik: "Create a free account", auth_eposta: "Email", auth_sifre: "Password", auth_ad: "Name",
     auth_ad_ph: "Your name", auth_sifre_ph: "Password (min 8 characters)", auth_veya: "or",
     giris_yap: "Sign in", gorsel_uretiliyor: "Generating image…",
@@ -362,7 +365,7 @@ const L = {
     sartlar_baslik: "Terms of Use",
     sartlar_icerik: "<p>ZenAI is an AI assistant; information it produces may be inaccurate or stale. Verify before making important decisions.</p><p>Generating illegal content, unauthorized use of copyrighted material and abuse are prohibited.</p><p>The service does not guarantee uninterrupted availability.</p>",
     iletisim_baslik: "Contact",
-    iletisim_icerik: "<p>Reach out for feedback, bug reports or collaboration.</p><p><strong>GitHub:</strong> github.com/Lennebraha38/ZENAI</p><p><strong>Site:</strong> zenai-two.vercel.app</p>",
+    iletisim_icerik: "<p>Reach out for feedback, bug reports or collaboration.</p><p><strong>GitHub:</strong> github.com/quantro11/ZENAI</p><p><strong>Site:</strong> zenai-two.vercel.app</p>",
   },
 };
 let dil = localStorage.getItem("lb_dil") || "tr";
@@ -1005,7 +1008,7 @@ async function mega(mesajlar, model, key, mt) {
   const meta = { model, messages: mesajlar, temperature: 0.7, max_tokens: mt || gecerliMaxTok() };
   if (sunucuModu !== false) {
     try {
-      const r = await fetch(window.location.origin + "/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(meta) });
+      const r = await fetch((API_KOK || window.location.origin) + "/api/chat", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(meta) });
       const j = await r.json();
       if (r.ok && j.content !== undefined) return j.content;
       if (String(j.error || "").includes("OPENROUTER_KEY")) sunucuModu = false;
@@ -1023,11 +1026,11 @@ async function mega(mesajlar, model, key, mt) {
 let akisDenetleyici = null;   // AbortController — üretimi durdurma
 async function megaAkis(mesajlar, model, key, mt, onDelta) {
   const meta = { model, messages: mesajlar, temperature: 0.7, max_tokens: mt || gecerliMaxTok(), stream: true };
-  const endpoint = sunucuModu !== false ? window.location.origin + "/api/chat" : OPENROUTER;
+  const endpoint = sunucuModu !== false ? (API_KOK || window.location.origin) + "/api/chat" : OPENROUTER;
   const hdrs = sunucuModu !== false ? { "Content-Type": "application/json" } : { "Content-Type": "application/json", "Authorization": "Bearer " + key };
   if (sunucuModu === false && !key) throw new Error("Sunucu rölesi çalışmıyor ve API key girilmedi.");
   akisDenetleyici = new AbortController();
-  const r = await fetch(endpoint, { method: "POST", headers: hdrs, body: JSON.stringify(meta), signal: akisDenetleyici.signal });
+  const r = await fetch(endpoint, { method: "POST", credentials: sunucuModu !== false ? "include" : "omit", headers: hdrs, body: JSON.stringify(meta), signal: akisDenetleyici.signal });
   if (!r.ok) {
     let msj = "HTTP " + r.status;
     try { msj = (await r.json()).error || msj; } catch (e) { msj = await r.text(); }
@@ -1951,7 +1954,7 @@ function bagla() {
         return;
       }
       // Gerçek ödeme: giriş + sunucu üzerinden Stripe Checkout.
-      if (!SUNUCU.girisYapildi) { authAc(); durum(true, "Ödeme için önce Google ile giriş yap"); setTimeout(() => durum(false), 2400); return; }
+      if (!SUNUCU.girisYapildi) { authAc(); durum(true, "Ödeme için önce giriş yap"); setTimeout(() => durum(false), 2400); return; }
       if (!SUNUCU.odemeAktif) {
         durum(true, "Ödeme altyapısı kuruluyor — şimdilik demo modunda");
         setTimeout(() => durum(false), 2600);

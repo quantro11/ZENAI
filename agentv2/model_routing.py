@@ -128,7 +128,7 @@ def konu_aciklama(konu: str) -> str:
 # ── Veri odakli routing: her gercek sonucu logla ──
 def routing_logla(konu: str, soru: str, model: str, skor: float, sure: Optional[float] = None, kelime: Optional[int] = None) -> Dict[str, Any]:
     """Test sonucunu kayide isler; routing kurallari veriyle guncellenebilir."""
-    import os, time, json
+    import time, json
     dizin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "kayit")
     os.makedirs(dizin, exist_ok=True)
     dosya = os.path.join(dizin, "routing_log.jsonl")
@@ -146,7 +146,7 @@ def routing_logla(konu: str, soru: str, model: str, skor: float, sure: Optional[
 
 def routing_rapor() -> Dict[str, Any]:
     """Loglardan hangi model hangi konuda kazaniyor ozetler."""
-    import os, glob, json
+    import glob, json
     sayilar = {}
     dizin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "kayit")
     dosyalar = glob.glob(os.path.join(dizin, "routing_log.jsonl")) or glob.glob("kayit/routing_log.jsonl")

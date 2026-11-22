@@ -24,7 +24,6 @@ Vercel → Proje (`zenai`) → Settings → Environment Variables
 | `STRIPE_PRICE_SILVER` | evet | Stripe → Products → Prices → ID | `price_...` |
 | `STRIPE_PRICE_GOLD` | evet | aynı | `price_...` |
 | `STRIPE_PRICE_PLATINUM` | evet | aynı | `price_...` |
-| `BLOB_READ_WRITE_TOKEN` | evet | `vercel blob create-store` (aşağıda) | `vercel_blob_rw_...` |
 | `ZENAI_ORIGIN` | evet | sitenin adresi (virgülle çoklu) | `https://zenai-two.vercel.app` |
 | `OPENROUTER_KEY` | evet | OpenRouter → API keys | `sk-or-...` |
 
